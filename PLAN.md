@@ -68,8 +68,12 @@ de principio a fin.
 | **3. Frases** | Generación de frases con el vocabulario guardado y el nivel HSK objetivo |
 | **4. Apuntes semanales** | Misma extracción por foto, pero mostrando una tabla con varias filas para revisar y guardar en bloque |
 | **5. Lista** | Buscar, filtrar por nivel HSK, editar y borrar cualquier entrada guardada |
+| **6. Vocabulario HSK por lotes** | `POST /api/hsk/batch` genera vocabulario estándar de un nivel en tandas de ~30-40, excluyendo lo ya guardado, para rellenar niveles ya superados |
+| **7. Repetición ligera** | `familiarity` (0-5) por carácter: sube con "Lo sé", vuelve a 0 con "Me cuesta". `GET /api/characters/random` pondera la selección con `1/(familiarity+1)`, así lo que cuesta más sale más a menudo sin desaparecer nunca del todo lo ya dominado |
+| **8. Radicales con significado + mnemotecnia** | `app/radicals.py` (tabla fija de los 214 radicales Kangxi, sin IA) para mostrar qué significa cada radical al comparar palabras; `POST /api/characters/{id}/explain` pide a la IA una explicación + truco mnemotécnico una sola vez por carácter (se cachea en la fila) |
+| **9. Voz** | Pronunciación del hanzi con la Web Speech API del propio navegador (`speechSynthesis`, `lang="zh-CN"`) — sin coste ni llamada a la IA |
+| **10. Cuentas** | Login/registro simple (usuario + contraseña con bcrypt, sesión en cookie httponly vía tabla `sessions`, ver `app/auth.py`); todas las tablas de datos llevan `user_id` y cada endpoint lo exige con `Depends(get_current_user_id)`. El vocabulario que ya existía antes de las cuentas se reclama automáticamente al crear la **primera** cuenta |
 
-Fases futuras posibles (no implementadas): repetición espaciada real
-(priorizar tarjetas por `review_count`/`last_reviewed_at`, que ya se
-guardan pero no se usan todavía para elegir qué tarjeta mostrar), historial
-de frases generadas, estadísticas de aciertos.
+Fases futuras posibles (no implementadas): historial de frases generadas,
+estadísticas de aciertos/racha, recuperación de contraseña (no tiene
+sentido todavía para una app de un puñado de usuarios de confianza).

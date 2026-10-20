@@ -13,7 +13,8 @@
      8. VOCABULARIO HSK         -> rellenar por lotes niveles ya superados
      9. APUNTES SEMANALES        -> foto de apuntes -> revisar -> guardar
     10. LISTA                     -> buscar/filtrar/editar/borrar
-    11. INICIO DE LA APP
+    11. AUTENTICACIÓN              -> login/registro, cada cuenta con su vocabulario
+    12. INICIO DE LA APP
 ============================================================ */
 
 
@@ -735,10 +736,94 @@ function initLista() {
 
 
 /* ============================================================
-   11. INICIO DE LA APP
+   11. AUTENTICACIÓN
+   Cuentas simples (usuario+contraseña); cada persona ve solo su
+   propio vocabulario. Mientras no haya sesión, se oculta el resto
+   de la app y se muestra el formulario de login/registro.
 ============================================================ */
 
-function init() {
+let currentUser = null;
+let authMode = 'login'; // 'login' | 'signup'
+
+function showAuthOverlay() {
+  qs('#app-main').classList.add('hidden');
+  qs('#main-nav').classList.add('hidden');
+  qs('#auth-status').classList.add('hidden');
+  qs('#auth-overlay').classList.remove('hidden');
+  qs('#auth-error').innerHTML = '';
+}
+
+function hideAuthOverlay() {
+  qs('#auth-overlay').classList.add('hidden');
+  qs('#app-main').classList.remove('hidden');
+  qs('#main-nav').classList.remove('hidden');
+  qs('#auth-status').classList.remove('hidden');
+}
+
+function setAuthMode(mode) {
+  authMode = mode;
+  qs('#auth-title').textContent = mode === 'login' ? 'Iniciar sesión' : 'Crear cuenta';
+  qs('#btn-auth-submit').textContent = mode === 'login' ? 'Entrar' : 'Crear cuenta';
+  qs('#btn-auth-toggle').textContent = mode === 'login'
+    ? '¿No tienes cuenta? Crear una' : '¿Ya tienes cuenta? Iniciar sesión';
+}
+
+async function checkAuth() {
+  try {
+    currentUser = await apiGet('/auth/me');
+    qs('#auth-username-label').textContent = `👤 ${currentUser.username}`;
+    hideAuthOverlay();
+    return true;
+  } catch (err) {
+    currentUser = null;
+    showAuthOverlay();
+    return false;
+  }
+}
+
+function initAuth() {
+  setAuthMode('login');
+
+  qs('#btn-auth-toggle').addEventListener('click', (e) => {
+    e.preventDefault();
+    setAuthMode(authMode === 'login' ? 'signup' : 'login');
+  });
+
+  const submitAuth = async () => {
+    const username = qs('#auth-username').value.trim();
+    const password = qs('#auth-password').value;
+    if (!username || !password) return;
+    const path = authMode === 'login' ? '/auth/login' : '/auth/signup';
+    try {
+      currentUser = await apiPost(path, { username, password });
+      qs('#auth-password').value = '';
+      qs('#auth-username-label').textContent = `👤 ${currentUser.username}`;
+      hideAuthOverlay();
+      startApp();
+    } catch (err) {
+      showError(qs('#auth-error'), err);
+    }
+  };
+
+  qs('#btn-auth-submit').addEventListener('click', submitAuth);
+  qs('#auth-password').addEventListener('keydown', (e) => { if (e.key === 'Enter') submitAuth(); });
+
+  qs('#btn-logout').addEventListener('click', async () => {
+    try {
+      await apiRequest('/auth/logout', { method: 'POST' });
+    } catch (err) { /* da igual, mostramos el login de todas formas */ }
+    currentUser = null;
+    currentCard = null;
+    showAuthOverlay();
+  });
+}
+
+
+/* ============================================================
+   12. INICIO DE LA APP
+============================================================ */
+
+function startApp() {
   initNav();
   initSettings();
   initAnadir();
@@ -747,6 +832,12 @@ function init() {
   initApuntes();
   initLista();
   showSection('tarjetas');
+}
+
+async function init() {
+  initAuth();
+  const authed = await checkAuth();
+  if (authed) startApp();
 }
 
 document.addEventListener('DOMContentLoaded', init);

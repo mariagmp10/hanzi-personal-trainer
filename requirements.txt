@@ -11,3 +11,6 @@ httpx2  # cliente HTTP que usa el SDK de Anthropic; lo usamos directamente para 
 
 # Configuración
 python-dotenv
+
+# Cuentas de usuario (hash de contraseñas)
+bcrypt

@@ -21,6 +21,32 @@ def _migrate(conn: sqlite3.Connection) -> None:
         conn.execute("ALTER TABLE characters ADD COLUMN explanation TEXT")
     if "mnemonic" not in columns:
         conn.execute("ALTER TABLE characters ADD COLUMN mnemonic TEXT")
+    if "user_id" not in columns:
+        conn.execute("ALTER TABLE characters ADD COLUMN user_id INTEGER REFERENCES users(id)")
+
+    settings_columns = {row["name"] for row in conn.execute("PRAGMA table_info(settings)")}
+    if "user_id" not in settings_columns:
+        conn.execute("ALTER TABLE settings ADD COLUMN user_id INTEGER REFERENCES users(id)")
+
+    # La tabla settings original tenía "id INTEGER PRIMARY KEY CHECK (id = 1)"
+    # (una sola fila global, de antes de que existieran las cuentas). Ahora
+    # hace falta una fila por usuario, lo que choca con ese CHECK. SQLite no
+    # permite quitar un CHECK con ALTER TABLE, así que si sigue ahí se
+    # recrea la tabla entera, conservando los datos ya migrados a user_id.
+    settings_sql = conn.execute(
+        "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'settings'"
+    ).fetchone()["sql"]
+    if settings_sql and "CHECK" in settings_sql:
+        conn.execute("ALTER TABLE settings RENAME TO settings_old")
+        conn.execute(
+            "CREATE TABLE settings (user_id INTEGER PRIMARY KEY REFERENCES users(id), "
+            "hsk_level INTEGER NOT NULL DEFAULT 3)"
+        )
+        conn.execute(
+            "INSERT INTO settings (user_id, hsk_level) "
+            "SELECT user_id, hsk_level FROM settings_old WHERE user_id IS NOT NULL"
+        )
+        conn.execute("DROP TABLE settings_old")
 
 
 def init_db() -> None:

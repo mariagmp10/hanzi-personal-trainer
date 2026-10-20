@@ -1,9 +1,11 @@
-# Hanzi Trainer
+# Hanzi Personal Trainer
 
-App local para memorizar vocabulario de chino mandarín (nivel HSK3),
-comparar caracteres por radical o pinyin, generar frases con tu vocabulario
-ya aprendido, y volcar el vocabulario de una foto de tus apuntes de clase.
-Ver `PLAN.md` para la explicación completa de la arquitectura.
+App local para memorizar vocabulario de chino mandarín, comparar caracteres
+por radical o pinyin (con el significado de cada radical y un truco
+mnemotécnico), generar frases con tu vocabulario ya aprendido, escuchar la
+pronunciación, y volcar el vocabulario de fotos de tus apuntes de clase.
+Cada persona tiene su propia cuenta y su propio vocabulario. Ver `PLAN.md`
+para la explicación completa de la arquitectura.
 
 ## Primeros pasos (Windows)
 
@@ -22,44 +24,58 @@ Ver `PLAN.md` para la explicación completa de la arquitectura.
    ```
    copy .env.example .env
    ```
-   Sin esta clave, la app arranca y puedes usar **Tarjetas** y **Lista**
-   con datos que añadas a mano, pero **Añadir** (búsqueda/foto), **Apuntes
-   semanales** y "Generar frase" necesitan la clave para funcionar.
-4. Inicializa la base de datos SQLite:
+   Sin esta clave, la app arranca y puedes iniciar sesión y usar **Tarjetas**
+   y **Lista** con datos que añadas a mano, pero **Añadir** (búsqueda/foto),
+   **Apuntes semanales**, "Generar frase" y "Explicar radicales" necesitan la
+   clave para funcionar.
+4. Arranca el servidor (la base de datos SQLite se crea sola la primera vez):
    ```
-   python -c "from app.db import init_db; init_db()"
+   uvicorn app.main:app --reload --port 8010
    ```
-5. Arranca el servidor:
-   ```
-   uvicorn app.main:app --reload
-   ```
-   Abre `http://127.0.0.1:8000` en el navegador.
-6. Inicializa git en esta carpeta (parte del aprendizaje de Claude Code):
+   Abre `http://127.0.0.1:8010` en el navegador.
+5. La primera vez que abras la app te pedirá iniciar sesión — pulsa "¿No
+   tienes cuenta? Crear una" y date de alta tú misma. Si ya tenías vocabulario
+   guardado de antes de que existieran las cuentas, la **primera** cuenta que
+   se cree se lo queda automáticamente.
+6. Inicializa git en esta carpeta si aún no lo has hecho:
    ```
    git init
    git add .
-   git commit -m "Fase 0-5: app completa de vocabulario HSK3"
+   git commit -m "Primera version"
    ```
+
+## Acceder desde el móvil (misma WiFi)
+
+Con el portátil y el móvil en la misma red, abre en el móvil
+`http://<IP-local-de-tu-portátil>:8010` (la IP la ves con `ipconfig` en una
+terminal, o te la doy yo). El servidor tiene que estar corriendo en el
+portátil en ese momento.
 
 ## Cómo se usa
 
-- **Añadir**: escribe el pinyin de una palabra (p. ej. `xiexie`) o su
-  significado en español (p. ej. `gracias`), o sube una foto de un carácter
-  suelto. La IA propone hanzi/pinyin/significado/nivel/radicales — revísalo,
-  corrígelo si falta algo, y pulsa "Guardar".
-- **Tarjetas**: te muestra un carácter al azar de los que ya tienes
-  guardados. Clic para ver el pinyin, otro clic para ver la traducción.
-  "Generar frase" construye una frase con tu vocabulario guardado centrada
-  en esa palabra. "Ver similares" busca otras palabras guardadas que
-  comparten radical o pinyin (sin tono) — clic en una de ellas para saltar
-  a su tarjeta.
-- **Apuntes semanales**: sube una foto de tu página de apuntes de clase. La
-  IA detecta todo el vocabulario que ve, lo muestra en una tabla editable
-  con checkboxes, y guardas solo lo que quieras (los duplicados exactos se
-  omiten automáticamente).
+- **Cuentas**: usuario + contraseña, por cuenta propia (sin recuperación de
+  contraseña ni verificación por email — es una app personal, no un
+  producto). Cada cuenta ve solo su propio vocabulario.
+- **Tarjetas**: carácter al azar, con más probabilidad de salir cuanto menos
+  lo domines ("Me cuesta" lo vuelve a poner en primera línea; "Lo sé" lo hace
+  aparecer menos, hasta un tope). Clic para revelar pinyin, otro clic para la
+  traducción. 🔊 escucha la pronunciación. "Generar frase" construye una
+  frase con tu vocabulario centrada en esa palabra. "Ver similares" agrupa
+  otras palabras guardadas por el radical que comparten (con su significado)
+  o por el mismo pinyin. "Explicar radicales" da una explicación de cómo se
+  forma el carácter y un truco mnemotécnico (se guarda la primera vez, no
+  vuelve a gastar en la IA para esa palabra).
+- **Añadir**: escribe el pinyin (p. ej. `shou` si no sabes el tono —
+  devuelve todos los caracteres comunes con esa lectura para que elijas) o
+  el significado en español, o sube una foto de un carácter suelto.
+- **Vocabulario HSK**: rellena de golpe el vocabulario estándar de un nivel
+  que ya deberías saberte, en lotes, evitando repetir lo que ya tienes.
+- **Apuntes semanales**: sube una o varias fotos de tus apuntes de clase; la
+  IA detecta el vocabulario (no frases completas) y lo revisas antes de
+  guardar.
 - **Lista**: busca, filtra por nivel HSK, edita o borra cualquier entrada.
-  Útil para corregir un radical o nivel HSK que la IA haya adivinado mal.
-- **Nivel objetivo** (en Inicio): el nivel HSK que se usa al generar frases.
+- **Resumen**: estadísticas por nivel HSK y el nivel objetivo usado al
+  generar frases.
 
 ## Estructura
 
@@ -69,14 +85,16 @@ hanzi-trainer/
 ├── requirements.txt
 ├── .env.example            <- ANTHROPIC_API_KEY
 ├── db/
-│   ├── schema.sql           <- characters, settings
+│   ├── schema.sql           <- users, sessions, characters, settings
 │   └── hanzi_trainer.db      <- la base de datos (no se sube a git)
 ├── ai/
-│   └── vocab_ai.py            <- las 3 llamadas a Claude (buscar, leer foto, generar frase)
+│   └── vocab_ai.py            <- llamadas a Claude (buscar, leer foto, frase, explicar, lote HSK)
 ├── app/
 │   ├── main.py                 <- API FastAPI
-│   ├── db.py                    <- conexión SQLite + init_db()
-│   ├── util.py                    <- pinyin_plain() (quita tonos para comparar)
-│   └── static/                     <- interfaz web (index.html/style.css/app.js)
+│   ├── auth.py                   <- cuentas: hash de contraseña + sesión por cookie
+│   ├── db.py                      <- conexión SQLite + init_db() + migraciones
+│   ├── radicals.py                 <- significados de los 214 radicales Kangxi (fijo, sin IA)
+│   ├── util.py                      <- pinyin_plain() (quita tonos para comparar)
+│   └── static/                       <- interfaz web (index.html/style.css/app.js)
 └── .gitignore
 ```

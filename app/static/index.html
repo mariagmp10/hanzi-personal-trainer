@@ -12,8 +12,14 @@
 <body>
 
 <header>
-  <h1>汉字 Hanzi Personal Trainer</h1>
-  <nav>
+  <div class="header-top">
+    <h1>汉字 Hanzi Personal Trainer</h1>
+    <div id="auth-status" class="hidden">
+      <span id="auth-username-label"></span>
+      <button id="btn-logout" class="secondary">Cerrar sesión</button>
+    </div>
+  </div>
+  <nav id="main-nav" class="hidden">
     <button class="nav-btn active" data-section="tarjetas">Tarjetas</button>
     <button class="nav-btn" data-section="anadir">Añadir</button>
     <button class="nav-btn" data-section="vocabulario-hsk">Vocabulario HSK</button>
@@ -23,7 +29,7 @@
   </nav>
 </header>
 
-<main>
+<main id="app-main" class="hidden">
 
   <!-- ===================== TARJETAS ===================== -->
   <section id="section-tarjetas" class="section active">
@@ -159,6 +165,20 @@
   <div class="modal">
     <h3>Editar carácter</h3>
     <div id="edit-modal-body"></div>
+  </div>
+</div>
+
+<div id="auth-overlay" class="modal-overlay hidden">
+  <div class="modal">
+    <h3 id="auth-title">Iniciar sesión</h3>
+    <p class="hint">Cada persona tiene su propia cuenta y su propio vocabulario guardado.</p>
+    <div class="suggestion-field"><label>Usuario</label><input type="text" id="auth-username" autocomplete="username"></div>
+    <div class="suggestion-field"><label>Contraseña</label><input type="password" id="auth-password" autocomplete="current-password"></div>
+    <div id="auth-error"></div>
+    <div class="row">
+      <button id="btn-auth-submit">Entrar</button>
+    </div>
+    <p class="hint"><a href="#" id="btn-auth-toggle">¿No tienes cuenta? Crear una</a></p>
   </div>
 </div>
 
