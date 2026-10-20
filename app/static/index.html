@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hanzi Personal Trainer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+SC:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header>
+  <h1>汉字 Hanzi Personal Trainer</h1>
+  <nav>
+    <button class="nav-btn active" data-section="tarjetas">Tarjetas</button>
+    <button class="nav-btn" data-section="anadir">Añadir</button>
+    <button class="nav-btn" data-section="vocabulario-hsk">Vocabulario HSK</button>
+    <button class="nav-btn" data-section="apuntes">Apuntes semanales</button>
+    <button class="nav-btn" data-section="lista">Lista</button>
+    <button class="nav-btn" data-section="inicio">Resumen</button>
+  </nav>
+</header>
+
+<main>
+
+  <!-- ===================== TARJETAS ===================== -->
+  <section id="section-tarjetas" class="section active">
+    <h2>Tarjetas</h2>
+    <div id="flashcard-empty" class="hint">Todavía no has añadido ningún carácter.</div>
+    <div id="flashcard-wrap" class="hidden">
+      <div class="flashcard-row">
+        <div id="flashcard">
+          <button id="btn-speak" class="flashcard-speak-btn" aria-label="Escuchar pronunciación">🔊</button>
+          <div id="flashcard-hanzi">?</div>
+          <div id="flashcard-pinyin" class="flashcard-extra hidden"></div>
+          <div id="flashcard-meaning" class="flashcard-extra hidden"></div>
+        </div>
+        <div class="flashcard-mark-buttons">
+          <button id="btn-mark-hard" class="btn-hard">😓 Me cuesta</button>
+          <button id="btn-mark-known" class="btn-easy">✅ Lo sé</button>
+        </div>
+      </div>
+      <p class="hint">Haz clic en la tarjeta para revelar el pinyin, y de nuevo para ver la traducción.</p>
+      <p class="hint" id="flashcard-familiarity"></p>
+      <div class="flashcard-actions">
+        <button id="btn-new-card" class="secondary">🔄 Otra tarjeta</button>
+        <button id="btn-generate-sentence" class="secondary">📝 Generar frase</button>
+        <button id="btn-show-similar" class="secondary">🔍 Ver similares</button>
+        <button id="btn-explain" class="secondary">💡 Explicar radicales</button>
+      </div>
+      <div id="sentence-result" class="card hidden"></div>
+      <div id="similar-result" class="hidden"></div>
+      <div id="explain-result" class="card hidden"></div>
+    </div>
+  </section>
+
+  <!-- ===================== AÑADIR ===================== -->
+  <section id="section-anadir" class="section">
+    <h2>Añadir carácter</h2>
+
+    <div class="card">
+      <h3>Por texto</h3>
+      <p class="hint">Escribe el pinyin, una palabra en español, o el propio hanzi si ya lo conoces.</p>
+      <div class="row">
+        <input type="text" id="lookup-query" placeholder="p. ej. 'xiexie', 'gracias' o '谢谢'">
+        <button id="btn-lookup">Buscar</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>Por foto (un carácter suelto)</h3>
+      <div class="row">
+        <input type="file" id="photo-single-input" accept="image/*">
+        <button id="btn-photo-single">Extraer de la foto</button>
+      </div>
+    </div>
+
+    <div id="suggestion-container"></div>
+  </section>
+
+  <!-- ===================== VOCABULARIO HSK ===================== -->
+  <section id="section-vocabulario-hsk" class="section">
+    <h2>Vocabulario por nivel HSK</h2>
+    <p class="hint">Si ya vas por un nivel más alto, rellena aquí el vocabulario estándar de niveles anteriores que ya deberías conocer, en vez de escribirlo a mano palabra por palabra. La IA evita repetir lo que ya tienes guardado.</p>
+    <div class="row">
+      <select id="hsk-batch-level">
+        <option value="1">HSK1</option>
+        <option value="2" selected>HSK2</option>
+        <option value="3">HSK3</option>
+        <option value="4">HSK4</option>
+        <option value="5">HSK5</option>
+        <option value="6">HSK6</option>
+      </select>
+      <button id="btn-hsk-batch-load">Cargar vocabulario</button>
+    </div>
+    <div id="hsk-batch-result"></div>
+  </section>
+
+  <!-- ===================== APUNTES SEMANALES ===================== -->
+  <section id="section-apuntes" class="section">
+    <h2>Apuntes semanales</h2>
+    <p class="hint">Sube una o varias fotos de tus apuntes de clase (p. ej. todas las páginas de la semana) y revisa lo que la IA ha detectado antes de guardarlo.</p>
+    <div class="row">
+      <input type="file" id="photo-notes-input" accept="image/*" multiple>
+      <button id="btn-photo-notes">Extraer vocabulario</button>
+    </div>
+    <div id="notes-result"></div>
+  </section>
+
+  <!-- ===================== LISTA ===================== -->
+  <section id="section-lista" class="section">
+    <h2>Todo lo guardado</h2>
+    <div class="row">
+      <input type="text" id="search-input" placeholder="Buscar por hanzi, pinyin o significado...">
+      <select id="hsk-filter">
+        <option value="">Todos los niveles</option>
+        <option value="1">HSK1</option>
+        <option value="2">HSK2</option>
+        <option value="3">HSK3</option>
+        <option value="4">HSK4</option>
+        <option value="5">HSK5</option>
+        <option value="6">HSK6</option>
+      </select>
+    </div>
+    <table id="characters-table">
+      <thead>
+        <tr>
+          <th>Hanzi</th><th>Pinyin</th><th>Español</th><th>HSK</th><th>Radicales</th><th>Origen</th><th></th>
+        </tr>
+      </thead>
+      <tbody id="characters-tbody"></tbody>
+    </table>
+  </section>
+
+  <!-- ===================== INICIO ===================== -->
+  <section id="section-inicio" class="section">
+    <h2>Resumen</h2>
+    <div class="stats-grid" id="stats-grid"></div>
+
+    <div class="card">
+      <h3>Nivel objetivo</h3>
+      <p>El nivel que se usa para generar frases con gramática apropiada.</p>
+      <select id="hsk-level-select">
+        <option value="1">HSK1</option>
+        <option value="2">HSK2</option>
+        <option value="3">HSK3</option>
+        <option value="4">HSK4</option>
+        <option value="5">HSK5</option>
+        <option value="6">HSK6</option>
+      </select>
+    </div>
+  </section>
+
+</main>
+
+<div id="edit-modal" class="modal-overlay hidden">
+  <div class="modal">
+    <h3>Editar carácter</h3>
+    <div id="edit-modal-body"></div>
+  </div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>

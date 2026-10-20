@@ -1,0 +1,13 @@
+# Backend web
+fastapi
+uvicorn[standard]
+
+# Subida de fotos (multipart/form-data)
+python-multipart
+
+# IA (buscar palabras, leer fotos, generar frases)
+anthropic
+httpx2  # cliente HTTP que usa el SDK de Anthropic; lo usamos directamente para forzar IPv4
+
+# Configuración
+python-dotenv
