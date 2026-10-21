@@ -19,7 +19,15 @@ from ai.vocab_ai import (
     generate_sentence,
     lookup_word,
 )
-from app.auth import SESSION_COOKIE, create_session, get_current_user_id, hash_password, verify_password
+from app.auth import (
+    SESSION_COOKIE,
+    check_invite_code,
+    create_session,
+    get_current_user,
+    get_current_user_id,
+    hash_password,
+    verify_password,
+)
 from app.db import get_connection, init_db
 from app.radicals import radical_meaning
 from app.util import pinyin_plain
@@ -73,6 +81,7 @@ class MarkIn(BaseModel):
 class SignupIn(BaseModel):
     username: str
     password: str
+    inviteCode: str = ""
 
 
 class LoginIn(BaseModel):
@@ -81,6 +90,62 @@ class LoginIn(BaseModel):
 
 
 MAX_FAMILIARITY = 5  # a partir de aquí ya no sube más, pero sigue saliendo de vez en cuando
+
+# Límites de por vida para cualquier cuenta que NO sea administradora (ver
+# users.is_admin). Protegen tu ANTHROPIC_API_KEY, que es compartida por
+# todas las cuentas: sin esto, una sola cuenta invitada podría agotar tu
+# límite de gasto mensual. "Explicar radicales" no necesita límite propio:
+# se cachea por carácter, así que ya queda acotado por el límite de
+# caracteres (como mucho se genera una vez por cada uno de los 200).
+NON_ADMIN_LIMITS = {
+    "characters": 200,
+    "lookup_uses": 25,
+    "photo_uses": 5,
+    "hsk_batch_uses": 3,
+    "sentence_uses": 10,
+}
+
+LIMIT_LABELS = {
+    "characters": "caracteres guardados",
+    "lookup_uses": "búsquedas por texto",
+    "photo_uses": "fotos procesadas",
+    "hsk_batch_uses": "cargas de vocabulario HSK",
+    "sentence_uses": "frases generadas",
+}
+
+
+def _enforce_limit(conn: sqlite3.Connection, user: sqlite3.Row, key: str, current_count: int) -> None:
+    """Para cuentas no administradoras, corta antes de gastar en la IA (o de
+    guardar otro carácter) si ya se alcanzó el límite de por vida."""
+    if user["is_admin"]:
+        return
+    limit = NON_ADMIN_LIMITS[key]
+    if current_count >= limit:
+        raise HTTPException(
+            status_code=403,
+            detail=f"Has alcanzado el límite de {LIMIT_LABELS[key]} de esta cuenta invitada ({limit}).",
+        )
+
+
+def _increment_usage(conn: sqlite3.Connection, user_id: int, column: str) -> None:
+    conn.execute(f"UPDATE users SET {column} = {column} + 1 WHERE id = ?", (user_id,))
+
+
+def user_row_to_dict(conn: sqlite3.Connection, row: sqlite3.Row) -> dict[str, Any]:
+    is_admin = bool(row["is_admin"])
+    usage = None
+    if not is_admin:
+        character_count = conn.execute(
+            "SELECT COUNT(*) AS c FROM characters WHERE user_id = ?", (row["id"],)
+        ).fetchone()["c"]
+        usage = {
+            "characters": {"used": character_count, "limit": NON_ADMIN_LIMITS["characters"]},
+            "lookups": {"used": row["lookup_uses"], "limit": NON_ADMIN_LIMITS["lookup_uses"]},
+            "photos": {"used": row["photo_uses"], "limit": NON_ADMIN_LIMITS["photo_uses"]},
+            "hskBatches": {"used": row["hsk_batch_uses"], "limit": NON_ADMIN_LIMITS["hsk_batch_uses"]},
+            "sentences": {"used": row["sentence_uses"], "limit": NON_ADMIN_LIMITS["sentence_uses"]},
+        }
+    return {"id": row["id"], "username": row["username"], "isAdmin": is_admin, "usage": usage}
 
 
 def character_row_to_dict(row: sqlite3.Row) -> dict[str, Any]:
@@ -139,6 +204,7 @@ def signup(payload: SignupIn, response: Response) -> dict[str, Any]:
     username = payload.username.strip()
     if not username or len(payload.password) < 4:
         raise HTTPException(status_code=400, detail="Usuario y contraseña (mínimo 4 caracteres) son obligatorios")
+    check_invite_code(payload.inviteCode.strip())
     conn = get_connection()
     try:
         existing = conn.execute("SELECT id FROM users WHERE username = ?", (username,)).fetchone()
@@ -165,7 +231,8 @@ def signup(payload: SignupIn, response: Response) -> dict[str, Any]:
         token = create_session(conn, user_id)
         conn.commit()
         response.set_cookie(SESSION_COOKIE, token, httponly=True, samesite="lax", max_age=SESSION_MAX_AGE)
-        return {"id": user_id, "username": username}
+        row = conn.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
+        return user_row_to_dict(conn, row)
     finally:
         conn.close()
 
@@ -180,7 +247,7 @@ def login(payload: LoginIn, response: Response) -> dict[str, Any]:
         token = create_session(conn, row["id"])
         conn.commit()
         response.set_cookie(SESSION_COOKIE, token, httponly=True, samesite="lax", max_age=SESSION_MAX_AGE)
-        return {"id": row["id"], "username": row["username"]}
+        return user_row_to_dict(conn, row)
     finally:
         conn.close()
 
@@ -199,13 +266,10 @@ def logout(request: Request, response: Response) -> None:
 
 
 @app.get("/api/auth/me")
-def me(user_id: int = Depends(get_current_user_id)) -> dict[str, Any]:
+def me(user: sqlite3.Row = Depends(get_current_user)) -> dict[str, Any]:
     conn = get_connection()
     try:
-        row = conn.execute("SELECT id, username FROM users WHERE id = ?", (user_id,)).fetchone()
-        if row is None:
-            raise HTTPException(status_code=401, detail="Sesión no válida")
-        return {"id": row["id"], "username": row["username"]}
+        return user_row_to_dict(conn, user)
     finally:
         conn.close()
 
@@ -251,16 +315,20 @@ def _insert_character(conn: sqlite3.Connection, character: CharacterIn, user_id:
 
 
 @app.post("/api/characters", status_code=201)
-def create_character(character: CharacterIn, user_id: int = Depends(get_current_user_id)) -> dict[str, Any]:
+def create_character(character: CharacterIn, user: sqlite3.Row = Depends(get_current_user)) -> dict[str, Any]:
     conn = get_connection()
     try:
         existing = conn.execute(
             "SELECT * FROM characters WHERE user_id = ? AND hanzi = ? AND pinyin = ?",
-            (user_id, character.hanzi, character.pinyin),
+            (user["id"], character.hanzi, character.pinyin),
         ).fetchone()
         if existing is not None:
             return character_row_to_dict(existing)
-        row = _insert_character(conn, character, user_id)
+        current_count = conn.execute(
+            "SELECT COUNT(*) AS c FROM characters WHERE user_id = ?", (user["id"],)
+        ).fetchone()["c"]
+        _enforce_limit(conn, user, "characters", current_count)
+        row = _insert_character(conn, character, user["id"])
         conn.commit()
         return character_row_to_dict(row)
     finally:
@@ -409,57 +477,94 @@ def similar_characters(character_id: int, user_id: int = Depends(get_current_use
 
 
 @app.post("/api/lookup")
-def lookup(payload: LookupIn, user_id: int = Depends(get_current_user_id)) -> list[dict[str, Any]]:
+def lookup(payload: LookupIn, user: sqlite3.Row = Depends(get_current_user)) -> list[dict[str, Any]]:
     if not payload.query.strip():
         raise HTTPException(status_code=400, detail="Escribe algo para buscar")
-    return _run_ai("lookup", lookup_word, payload.query.strip())
+    conn = get_connection()
+    try:
+        _enforce_limit(conn, user, "lookup_uses", user["lookup_uses"])
+        result = _run_ai("lookup", lookup_word, payload.query.strip())
+        _increment_usage(conn, user["id"], "lookup_uses")
+        conn.commit()
+        return result
+    finally:
+        conn.close()
 
 
 @app.post("/api/photo/extract")
-async def photo_extract(file: UploadFile, user_id: int = Depends(get_current_user_id)) -> list[dict[str, Any]]:
+async def photo_extract(file: UploadFile, user: sqlite3.Row = Depends(get_current_user)) -> list[dict[str, Any]]:
     image_bytes = await file.read()
     if not image_bytes:
         raise HTTPException(status_code=400, detail="La imagen está vacía")
     media_type = file.content_type or "image/jpeg"
-    return _run_ai("photo", extract_from_photo, image_bytes, media_type)
+    conn = get_connection()
+    try:
+        _enforce_limit(conn, user, "photo_uses", user["photo_uses"])
+        result = _run_ai("photo", extract_from_photo, image_bytes, media_type)
+        _increment_usage(conn, user["id"], "photo_uses")
+        conn.commit()
+        return result
+    finally:
+        conn.close()
 
 
 @app.post("/api/hsk/batch")
-def hsk_batch(payload: HskBatchIn, user_id: int = Depends(get_current_user_id)) -> list[dict[str, Any]]:
-    return _run_ai("hsk-batch", generate_hsk_batch, payload.level, payload.excludeHanzi)
+def hsk_batch(payload: HskBatchIn, user: sqlite3.Row = Depends(get_current_user)) -> list[dict[str, Any]]:
+    conn = get_connection()
+    try:
+        _enforce_limit(conn, user, "hsk_batch_uses", user["hsk_batch_uses"])
+        result = _run_ai("hsk-batch", generate_hsk_batch, payload.level, payload.excludeHanzi)
+        _increment_usage(conn, user["id"], "hsk_batch_uses")
+        conn.commit()
+        return result
+    finally:
+        conn.close()
 
 
 @app.post("/api/characters/bulk")
 def bulk_create_characters(
-    characters: list[CharacterIn], user_id: int = Depends(get_current_user_id)
+    characters: list[CharacterIn], user: sqlite3.Row = Depends(get_current_user)
 ) -> dict[str, Any]:
     conn = get_connection()
     try:
+        current_count = conn.execute(
+            "SELECT COUNT(*) AS c FROM characters WHERE user_id = ?", (user["id"],)
+        ).fetchone()["c"]
         inserted = 0
         skipped = 0
+        limit_reached = False
         for character in characters:
             existing = conn.execute(
                 "SELECT id FROM characters WHERE user_id = ? AND hanzi = ? AND pinyin = ?",
-                (user_id, character.hanzi, character.pinyin),
+                (user["id"], character.hanzi, character.pinyin),
             ).fetchone()
             if existing:
                 skipped += 1
                 continue
-            _insert_character(conn, character, user_id)
+            if not user["is_admin"] and current_count >= NON_ADMIN_LIMITS["characters"]:
+                limit_reached = True
+                break
+            _insert_character(conn, character, user["id"])
+            current_count += 1
             inserted += 1
         conn.commit()
-        return {"inserted": inserted, "skipped": skipped}
+        result = {"inserted": inserted, "skipped": skipped}
+        if limit_reached:
+            result["limitReached"] = True
+        return result
     finally:
         conn.close()
 
 
 @app.post("/api/sentences/generate")
-def sentence_generate(payload: SentenceIn, user_id: int = Depends(get_current_user_id)) -> dict[str, Any]:
+def sentence_generate(payload: SentenceIn, user: sqlite3.Row = Depends(get_current_user)) -> dict[str, Any]:
     conn = get_connection()
     try:
+        user_id = user["id"]
         all_rows = conn.execute("SELECT * FROM characters WHERE user_id = ?", (user_id,)).fetchall()
         if not all_rows:
             raise HTTPException(status_code=400, detail="Añade algún carácter antes de generar frases")
+        _enforce_limit(conn, user, "sentence_uses", user["sentence_uses"])
 
         focus_word = None
         if payload.characterId is not None:
@@ -480,7 +585,10 @@ def sentence_generate(payload: SentenceIn, user_id: int = Depends(get_current_us
         settings_row = conn.execute("SELECT hsk_level FROM settings WHERE user_id = ?", (user_id,)).fetchone()
         hsk_level = settings_row["hsk_level"] if settings_row else 3
 
-        return _run_ai("sentence", generate_sentence, known_words, hsk_level, focus_word)
+        result = _run_ai("sentence", generate_sentence, known_words, hsk_level, focus_word)
+        _increment_usage(conn, user_id, "sentence_uses")
+        conn.commit()
+        return result
     finally:
         conn.close()
 

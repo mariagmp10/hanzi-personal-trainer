@@ -14,6 +14,21 @@ def get_connection() -> sqlite3.Connection:
 
 def _migrate(conn: sqlite3.Connection) -> None:
     """Ajustes a tablas ya existentes que 'CREATE TABLE IF NOT EXISTS' no cubre."""
+    user_columns = {row["name"] for row in conn.execute("PRAGMA table_info(users)")}
+    if "is_admin" not in user_columns:
+        conn.execute("ALTER TABLE users ADD COLUMN is_admin INTEGER NOT NULL DEFAULT 0")
+        # La cuenta más antigua es la tuya (creada antes de que existieran
+        # los límites de uso): se marca como administradora, exenta de ellos.
+        conn.execute("UPDATE users SET is_admin = 1 WHERE id = (SELECT MIN(id) FROM users)")
+    if "lookup_uses" not in user_columns:
+        conn.execute("ALTER TABLE users ADD COLUMN lookup_uses INTEGER NOT NULL DEFAULT 0")
+    if "photo_uses" not in user_columns:
+        conn.execute("ALTER TABLE users ADD COLUMN photo_uses INTEGER NOT NULL DEFAULT 0")
+    if "hsk_batch_uses" not in user_columns:
+        conn.execute("ALTER TABLE users ADD COLUMN hsk_batch_uses INTEGER NOT NULL DEFAULT 0")
+    if "sentence_uses" not in user_columns:
+        conn.execute("ALTER TABLE users ADD COLUMN sentence_uses INTEGER NOT NULL DEFAULT 0")
+
     columns = {row["name"] for row in conn.execute("PRAGMA table_info(characters)")}
     if "familiarity" not in columns:
         conn.execute("ALTER TABLE characters ADD COLUMN familiarity INTEGER NOT NULL DEFAULT 0")

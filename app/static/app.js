@@ -167,6 +167,24 @@ async function loadStats() {
     const settings = await apiGet('/settings');
     qs('#hsk-level-select').value = String(settings.hskLevel);
   } catch (err) { /* si falla, se queda el valor por defecto del select */ }
+
+  renderUsageCard();
+}
+
+function renderUsageCard() {
+  const card = qs('#usage-card');
+  if (!currentUser || currentUser.isAdmin || !currentUser.usage) {
+    card.classList.add('hidden');
+    return;
+  }
+  card.classList.remove('hidden');
+  const labels = {
+    characters: 'Caracteres guardados', lookups: 'Búsquedas por texto', photos: 'Fotos procesadas',
+    hskBatches: 'Cargas de vocabulario HSK', sentences: 'Frases generadas',
+  };
+  qs('#usage-list').innerHTML = Object.entries(currentUser.usage).map(([key, { used, limit }]) => `
+    <p>${labels[key] || key}: <strong>${used} / ${limit}</strong></p>
+  `).join('');
 }
 
 function initSettings() {
@@ -540,7 +558,9 @@ async function saveHskBatchSelected() {
   try {
     const result = await apiPost('/characters/bulk', toSave);
     hskBatchRows = [];
-    container.innerHTML = `<p>✅ Guardados ${result.inserted}. Omitidos por duplicados: ${result.skipped}.</p>`;
+    const limitNote = result.limitReached
+      ? '<p class="hint">⚠️ Has alcanzado el límite de caracteres de esta cuenta, no se guardaron todos.</p>' : '';
+    container.innerHTML = `<p>✅ Guardados ${result.inserted}. Omitidos por duplicados: ${result.skipped}.</p>${limitNote}`;
   } catch (err) {
     showError(container, err);
   }
@@ -605,7 +625,9 @@ function renderNotesTable(suggestions) {
     if (toSave.length === 0) return;
     try {
       const result = await apiPost('/characters/bulk', toSave);
-      container.innerHTML = `<p>✅ Guardados ${result.inserted}. Omitidos por duplicados: ${result.skipped}.</p>`;
+      const limitNote = result.limitReached
+        ? '<p class="hint">⚠️ Has alcanzado el límite de caracteres de esta cuenta, no se guardaron todos.</p>' : '';
+      container.innerHTML = `<p>✅ Guardados ${result.inserted}. Omitidos por duplicados: ${result.skipped}.</p>${limitNote}`;
     } catch (err) {
       showError(container, err);
     }
@@ -766,6 +788,7 @@ function setAuthMode(mode) {
   qs('#btn-auth-submit').textContent = mode === 'login' ? 'Entrar' : 'Crear cuenta';
   qs('#btn-auth-toggle').textContent = mode === 'login'
     ? '¿No tienes cuenta? Crear una' : '¿Ya tienes cuenta? Iniciar sesión';
+  qs('#auth-invite-field').classList.toggle('hidden', mode === 'login');
 }
 
 async function checkAuth() {
@@ -794,8 +817,10 @@ function initAuth() {
     const password = qs('#auth-password').value;
     if (!username || !password) return;
     const path = authMode === 'login' ? '/auth/login' : '/auth/signup';
+    const body = { username, password };
+    if (authMode === 'signup') body.inviteCode = qs('#auth-invite-code').value.trim();
     try {
-      currentUser = await apiPost(path, { username, password });
+      currentUser = await apiPost(path, body);
       qs('#auth-password').value = '';
       qs('#auth-username-label').textContent = `👤 ${currentUser.username}`;
       hideAuthOverlay();

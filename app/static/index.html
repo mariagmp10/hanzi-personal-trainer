@@ -157,6 +157,12 @@
         <option value="6">HSK6</option>
       </select>
     </div>
+
+    <div class="card hidden" id="usage-card">
+      <h3>Uso de esta cuenta invitada</h3>
+      <p class="hint">Cuentas no administradoras tienen límites de por vida para no agotar la IA compartida.</p>
+      <div id="usage-list"></div>
+    </div>
   </section>
 
 </main>
@@ -174,6 +180,7 @@
     <p class="hint">Cada persona tiene su propia cuenta y su propio vocabulario guardado.</p>
     <div class="suggestion-field"><label>Usuario</label><input type="text" id="auth-username" autocomplete="username"></div>
     <div class="suggestion-field"><label>Contraseña</label><input type="password" id="auth-password" autocomplete="current-password"></div>
+    <div class="suggestion-field hidden" id="auth-invite-field"><label>Código invitación</label><input type="text" id="auth-invite-code"></div>
     <div id="auth-error"></div>
     <div class="row">
       <button id="btn-auth-submit">Entrar</button>

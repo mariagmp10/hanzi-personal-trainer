@@ -5,7 +5,12 @@ CREATE TABLE IF NOT EXISTS users (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     username TEXT NOT NULL UNIQUE,
     password_hash TEXT NOT NULL,
-    created_at TEXT NOT NULL
+    created_at TEXT NOT NULL,
+    is_admin INTEGER NOT NULL DEFAULT 0,       -- la primera cuenta (tú) queda exenta de los límites de uso
+    lookup_uses INTEGER NOT NULL DEFAULT 0,    -- contadores de por vida, solo se aplican si is_admin = 0
+    photo_uses INTEGER NOT NULL DEFAULT 0,
+    hsk_batch_uses INTEGER NOT NULL DEFAULT 0,
+    sentence_uses INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS sessions (

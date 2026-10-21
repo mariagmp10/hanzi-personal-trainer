@@ -36,8 +36,13 @@ para la explicación completa de la arquitectura.
 5. La primera vez que abras la app te pedirá iniciar sesión — pulsa "¿No
    tienes cuenta? Crear una" y date de alta tú misma. Si ya tenías vocabulario
    guardado de antes de que existieran las cuentas, la **primera** cuenta que
-   se cree se lo queda automáticamente.
-6. Inicializa git en esta carpeta si aún no lo has hecho:
+   se cree se lo queda automáticamente, y además queda marcada como
+   **administradora** (sin límites de uso — ver más abajo).
+6. Antes de compartir la app con alguien fuera de tu red, pon un código en
+   `SIGNUP_INVITE_CODE` dentro de tu `.env` y pásaselo solo a quien quieras
+   invitar; si lo dejas vacío, cualquiera que tenga el enlace puede crearse
+   una cuenta.
+7. Inicializa git en esta carpeta si aún no lo has hecho:
    ```
    git init
    git add .
@@ -55,7 +60,13 @@ portátil en ese momento.
 
 - **Cuentas**: usuario + contraseña, por cuenta propia (sin recuperación de
   contraseña ni verificación por email — es una app personal, no un
-  producto). Cada cuenta ve solo su propio vocabulario.
+  producto). Cada cuenta ve solo su propio vocabulario. Para registrarse
+  hace falta el código de `SIGNUP_INVITE_CODE` (si lo has puesto). Cualquier
+  cuenta que no sea la tuya (la administradora) tiene límites de por vida
+  para no agotar tu clave de la API compartida: 200 caracteres guardados, 25
+  búsquedas por texto, 5 fotos procesadas, 3 cargas de vocabulario HSK y 10
+  frases generadas (ajustables en `NON_ADMIN_LIMITS`, en `app/main.py`). El
+  uso restante se ve en **Resumen**.
 - **Tarjetas**: carácter al azar, con más probabilidad de salir cuanto menos
   lo domines ("Me cuesta" lo vuelve a poner en primera línea; "Lo sé" lo hace
   aparecer menos, hasta un tope). Clic para revelar pinyin, otro clic para la
