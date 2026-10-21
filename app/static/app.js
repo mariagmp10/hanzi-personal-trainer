@@ -126,16 +126,70 @@ function loadingCatHtml(message) {
    4. NAVEGACIÓN
 ============================================================ */
 
+// Menú de dos niveles: categorías arriba (en el header) y, si la categoría
+// tiene subapartados, una fila de pestañas secundarias debajo. "Resumen"
+// tiene contenido propio (section: 'inicio') además de un subapartado;
+// "Añadir Vocabulario" no tiene contenido propio, solo sus 3 subapartados.
+const NAV_STRUCTURE = [
+  { key: 'tarjetas', label: 'Flash cards', section: 'tarjetas' },
+  {
+    key: 'anadir-vocab', label: 'Añadir Vocabulario',
+    children: [
+      { key: 'anadir', label: 'Manualmente', section: 'anadir' },
+      { key: 'apuntes', label: 'Por apuntes', section: 'apuntes' },
+      { key: 'vocabulario-hsk', label: 'Automáticamente por nivel HSK', section: 'vocabulario-hsk' },
+    ],
+  },
+  {
+    key: 'resumen-cat', label: 'Resumen', section: 'inicio',
+    children: [
+      { key: 'lista', label: 'Lista de vocabulario aprendido', section: 'lista' },
+    ],
+  },
+];
+
+function subTabsFor(category) {
+  const own = category.section ? [{ key: category.key, label: category.label, section: category.section }] : [];
+  return [...own, ...(category.children || [])];
+}
+
+function categoryForSection(sectionName) {
+  return NAV_STRUCTURE.find(cat =>
+    cat.section === sectionName || (cat.children || []).some(c => c.section === sectionName)
+  ) || NAV_STRUCTURE[0];
+}
+
 function showSection(name) {
   qsa('.section').forEach(el => el.classList.toggle('active', el.id === `section-${name}`));
-  qsa('.nav-btn').forEach(btn => btn.classList.toggle('active', btn.dataset.section === name));
+
+  const category = categoryForSection(name);
+  qsa('#main-nav .nav-btn').forEach(btn => btn.classList.toggle('active', btn.dataset.category === category.key));
+
+  const tabs = subTabsFor(category);
+  const subNav = qs('#sub-nav');
+  if (tabs.length > 1) {
+    subNav.innerHTML = tabs.map(t => `
+      <button class="sub-nav-btn${t.section === name ? ' active' : ''}" data-section="${t.section}">${t.label}</button>
+    `).join('');
+    qsa('.sub-nav-btn', subNav).forEach(btn => btn.addEventListener('click', () => showSection(btn.dataset.section)));
+    subNav.classList.remove('hidden');
+  } else {
+    subNav.innerHTML = '';
+    subNav.classList.add('hidden');
+  }
+
   if (name === 'inicio') loadStats();
   if (name === 'tarjetas' && !currentCard) loadRandomCard();
   if (name === 'lista') loadList();
 }
 
 function initNav() {
-  qsa('.nav-btn').forEach(btn => btn.addEventListener('click', () => showSection(btn.dataset.section)));
+  const mainNav = qs('#main-nav');
+  mainNav.innerHTML = NAV_STRUCTURE.map(cat => `<button class="nav-btn" data-category="${cat.key}">${cat.label}</button>`).join('');
+  qsa('.nav-btn', mainNav).forEach(btn => btn.addEventListener('click', () => {
+    const category = NAV_STRUCTURE.find(c => c.key === btn.dataset.category);
+    showSection(category.section || category.children[0].section);
+  }));
 }
 
 
@@ -331,8 +385,7 @@ function renderCard() {
   qs('#sentence-result').classList.add('hidden');
   qs('#similar-result').classList.add('hidden');
   qs('#explain-result').classList.add('hidden');
-  const dots = '●'.repeat(currentCard.familiarity) + '○'.repeat(5 - currentCard.familiarity);
-  qs('#flashcard-familiarity').textContent = `Dominio: ${dots}`;
+  qs('#flashcard-familiarity').textContent = `Dominio: ${dominioDots(currentCard.familiarity)}`;
 }
 
 function speakHanzi(text) {
@@ -677,6 +730,10 @@ function initApuntes() {
    10. LISTA
 ============================================================ */
 
+function dominioDots(familiarity) {
+  return '●'.repeat(familiarity) + '○'.repeat(5 - familiarity);
+}
+
 function characterRowHtml(c) {
   return `
     <tr data-id="${c.id}">
@@ -684,6 +741,7 @@ function characterRowHtml(c) {
       <td>${c.pinyin}</td>
       <td>${c.meaningEs}</td>
       <td>${hskLabel(c.hskLevel)}</td>
+      <td>${dominioDots(c.familiarity)}</td>
       <td>${(c.radicals || []).join(', ')}</td>
       <td>${c.source}</td>
       <td>
@@ -703,7 +761,7 @@ async function loadList() {
   if (hskLevel) params.set('hskLevel', hskLevel);
   try {
     const characters = await apiGet('/characters?' + params.toString());
-    tbody.innerHTML = characters.map(characterRowHtml).join('') || '<tr><td colspan="7" class="hint">Sin resultados.</td></tr>';
+    tbody.innerHTML = characters.map(characterRowHtml).join('') || '<tr><td colspan="8" class="hint">Sin resultados.</td></tr>';
     qsa('.btn-edit', tbody).forEach(btn => btn.addEventListener('click', (e) => {
       const id = e.target.closest('tr').dataset.id;
       const character = characters.find(c => String(c.id) === id);
@@ -716,7 +774,7 @@ async function loadList() {
       loadList();
     }));
   } catch (err) {
-    tbody.innerHTML = `<tr><td colspan="7"><div class="error-box">${err.message}</div></td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="8"><div class="error-box">${err.message}</div></td></tr>`;
   }
 }
 
@@ -770,6 +828,7 @@ let authMode = 'login'; // 'login' | 'signup'
 function showAuthOverlay() {
   qs('#app-main').classList.add('hidden');
   qs('#main-nav').classList.add('hidden');
+  qs('#sub-nav').classList.add('hidden');
   qs('#auth-status').classList.add('hidden');
   qs('#auth-overlay').classList.remove('hidden');
   qs('#auth-error').innerHTML = '';
