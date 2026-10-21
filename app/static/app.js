@@ -131,7 +131,7 @@ function loadingCatHtml(message) {
 // tiene contenido propio (section: 'inicio') además de un subapartado;
 // "Añadir Vocabulario" no tiene contenido propio, solo sus 3 subapartados.
 const NAV_STRUCTURE = [
-  { key: 'tarjetas', label: 'Flash cards', section: 'tarjetas' },
+  { key: 'tarjetas', label: 'Flash cards', section: 'tarjetas', featured: true },
   {
     key: 'anadir-vocab', label: 'Añadir Vocabulario',
     children: [
@@ -185,7 +185,9 @@ function showSection(name) {
 
 function initNav() {
   const mainNav = qs('#main-nav');
-  mainNav.innerHTML = NAV_STRUCTURE.map(cat => `<button class="nav-btn" data-category="${cat.key}">${cat.label}</button>`).join('');
+  mainNav.innerHTML = NAV_STRUCTURE.map(cat =>
+    `<button class="nav-btn${cat.featured ? ' nav-btn-featured' : ''}" data-category="${cat.key}">${cat.label}</button>`
+  ).join('');
   qsa('.nav-btn', mainNav).forEach(btn => btn.addEventListener('click', () => {
     const category = NAV_STRUCTURE.find(c => c.key === btn.dataset.category);
     showSection(category.section || category.children[0].section);
