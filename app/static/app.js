@@ -419,9 +419,13 @@ async function speakHanzi(text) {
   }
 
   window.speechSynthesis.cancel();
-  const utterance = new SpeechSynthesisUtterance(text);
+  // Una coma china entre cada carácter obliga a la voz a hacer una pequeña
+  // pausa y pronunciar cada tono por separado, en vez de diluirlos al leer
+  // la palabra entera seguida (donde el tono del último carácter se suaviza).
+  const spaced = [...text].join('，');
+  const utterance = new SpeechSynthesisUtterance(spaced);
   utterance.lang = 'zh-CN';
-  utterance.rate = 0.8; // más lento, para que los tonos se noten mejor
+  utterance.rate = 0.6; // más lento, para que los tonos se noten mejor
   if (voice) utterance.voice = voice;
   window.speechSynthesis.speak(utterance);
 }
