@@ -390,14 +390,39 @@ function renderCard() {
   qs('#flashcard-familiarity').textContent = `Dominio: ${dominioDots(currentCard.familiarity)}`;
 }
 
-function speakHanzi(text) {
+let voicesReadyPromise = null;
+function waitForVoices() {
+  if (voicesReadyPromise) return voicesReadyPromise;
+  voicesReadyPromise = new Promise(resolve => {
+    const existing = window.speechSynthesis.getVoices();
+    if (existing.length) return resolve(existing);
+    window.speechSynthesis.onvoiceschanged = () => resolve(window.speechSynthesis.getVoices());
+    setTimeout(() => resolve(window.speechSynthesis.getVoices()), 1000);
+  });
+  return voicesReadyPromise;
+}
+
+async function speakHanzi(text) {
   if (!window.speechSynthesis) {
     alert('Tu navegador no soporta la lectura en voz alta.');
     return;
   }
+  // Dejar que el navegador elija la voz solo por "lang" no siempre coge una
+  // voz china de verdad (a veces usa una genérica que no marca los tonos) —
+  // aquí se busca explícitamente una voz zh-CN instalada, prefiriendo
+  // "Huihui" (la más clara de las voces chinas clásicas de Windows).
+  const voices = await waitForVoices();
+  const zhVoices = voices.filter(v => v.lang && v.lang.toLowerCase().startsWith('zh'));
+  const voice = zhVoices.find(v => /huihui/i.test(v.name)) || zhVoices.find(v => v.lang.toLowerCase() === 'zh-cn') || zhVoices[0];
+  if (!voice) {
+    alert('No se ha encontrado ninguna voz en chino instalada. Instala una en Configuración > Hora e idioma > Voz y recarga la página.');
+  }
+
   window.speechSynthesis.cancel();
   const utterance = new SpeechSynthesisUtterance(text);
   utterance.lang = 'zh-CN';
+  utterance.rate = 0.8; // más lento, para que los tonos se noten mejor
+  if (voice) utterance.voice = voice;
   window.speechSynthesis.speak(utterance);
 }
 
